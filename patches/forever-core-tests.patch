@@ -1,0 +1,134 @@
+diff --git a/tests/tracker_questie_spec.lua b/tests/tracker_questie_spec.lua
+new file mode 100644
+index 0000000..2071139
+--- /dev/null
++++ b/tests/tracker_questie_spec.lua
+@@ -0,0 +1,128 @@
++-- The column can follow Questie's tracker instead of the game's: Questie hides the game's quest tracker and lists the
++-- quests in Questie_BaseFrame, so "under the quest tracker" is measured from that frame once the player picks it.
++-- The column is placed on UIParent by coordinates and never anchored to Questie's frame.
++local harness = dofile("tests/tracker_host_harness.lua")
++
++-- Questie's frame as the host may use it: its place, its scale, whether it is shown, and a script hook.
++local rect = { left = 700, top = 600, bottom = 350, shown = true }
++local hooks = {}
++local reads = {
++	GetLeft = function()
++		return rect.left
++	end,
++	GetTop = function()
++		return rect.top
++	end,
++	GetBottom = function()
++		return rect.bottom
++	end,
++	GetEffectiveScale = function()
++		return 1
++	end,
++	IsShown = function()
++		return rect.shown
++	end,
++	HookScript = function(_, event, fn)
++		hooks[event] = fn
++	end,
++}
++local questie = setmetatable({}, {
++	__index = function(_, key)
++		return reads[key] or error("the host used Questie's " .. tostring(key), 2)
++	end,
++	__newindex = function(_, key)
++		error("the host wrote Questie's " .. tostring(key), 2)
++	end,
++})
++
++local function At(ctx, corner, x, y)
++	local point = ctx.host.point
++	return point[1] == corner and point[2] == ctx.parent and point[3] == "BOTTOMLEFT" and point[4] == x and point[5] == y
++end
++local function UnderGame(ctx)
++	return At(ctx, "TOPLEFT", ctx.nativeRect.left, ctx.nativeRect.line)
++end
++-- Questie's last line moved: the probe on its bottom left corner changes size.
++local function Resize(ctx)
++	ctx.moveLine(ctx.nativeRect.line)
++end
++-- A second of game time: the queued timers run, then the layouts they queued.
++local function Tick(ctx)
++	ctx.drain()
++	ctx.drain()
++end
++
++local t = harness.new({ hostSettings = { attached = false } })
++local check, api = t.check, t.ns.TrackerHost
++check(api.GetTarget() == "game" and UnderGame(t), "the column follows the game's tracker until told otherwise")
++
++-- Picked before Questie has built its tracker, the column stays by the game's and checks once a second.
++api.SetTarget("questie")
++Tick(t)
++check(api.GetTarget() == "questie" and t.hostSettings.target == "questie", "the choice is saved")
++check(UnderGame(t), "with no Questie tracker yet, the game's tracker is still the place")
++check(t.pending() == 1, "and one check is waiting for Questie's frame")
++Tick(t)
++check(UnderGame(t) and t.pending() == 1, "a check that finds nothing waits again")
++
++rawset(t.env, "Questie_BaseFrame", questie)
++Tick(t)
++check(At(t, "TOPLEFT", 700, 350), "once Questie's tracker exists the column sits under its last line")
++check(t.pending() == 0, "and the checking stops")
++check(t.first.available == 600 - 10, "the sections lay out in the room from Questie's top")
++check(type(hooks.OnShow) == "function" and type(hooks.OnHide) == "function", "its show and hide are hooked")
++
++-- A quest added or dropped moves Questie's last line; a drag moves the whole frame.
++rect.bottom = 300
++Resize(t)
++check(At(t, "TOPLEFT", 700, 300), "the column follows Questie's last line")
++rect.left, rect.top, rect.bottom = 200, 900, 640
++Resize(t)
++check(At(t, "TOPLEFT", 200, 640), "and Questie's tracker wherever it is dragged")
++
++-- No room under the list: left of Questie's tracker, by coordinates.
++rect.bottom = t.host:GetHeight() - 1
++Resize(t)
++check(At(t, "TOPRIGHT", 200, 900), "a column that does not fit under the list sits left of Questie's tracker")
++rect.bottom = 640
++Resize(t)
++check(At(t, "TOPLEFT", 200, 640), "and returns under it when it fits")
++
++-- Questie hides its tracker with nothing tracked: the column takes the tracker's top, as it does for the game's.
++rect.shown = false
++hooks.OnHide(questie)
++Tick(t)
++check(At(t, "TOPLEFT", 200, 900), "a hidden Questie tracker leaves the column at its top")
++rect.shown = true
++hooks.OnShow(questie)
++Tick(t)
++check(At(t, "TOPLEFT", 200, 640), "and showing it puts the column under the list again")
++
++-- The Left place follows the same tracker.
++api.SetPlacement("left")
++Tick(t)
++check(At(t, "TOPRIGHT", 200, 900), "Left is left of Questie's tracker")
++api.SetPlacement("under")
++Tick(t)
++
++-- Back to the game's tracker.
++api.SetTarget("game")
++Tick(t)
++check(t.hostSettings.target == nil and UnderGame(t), "picking the game's tracker returns the column to it")
++api.SetTarget("elsewhere")
++check(api.GetTarget() == "game", "an unknown target is ignored")
++
++-- Combat places nothing; the layout after it does.
++api.SetTarget("questie")
++Tick(t)
++t.setCombat(true)
++rect.bottom = 500
++Resize(t)
++check(At(t, "TOPLEFT", 200, 640), "combat holds the column where it was")
++t.setCombat(false)
++t.fire("PLAYER_REGEN_ENABLED")
++Tick(t)
++check(At(t, "TOPLEFT", 200, 500), "and the layout after combat catches up")
++
++rawset(t.env, "Questie_BaseFrame", nil)
++print(("tracker_questie_spec: %d checks passed"):format(t.checks()))
