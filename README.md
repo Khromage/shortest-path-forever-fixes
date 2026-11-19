@@ -3,8 +3,7 @@
 A local patch for WoW: Forever that lets the shared Forever tracker column (Shortest Path Forever's journey steps,
 and any other Forever addon section) attach to Questie's tracker instead of the game's own.
 
-Status: **work in progress.** The logic passes ForeverCore's tracker specs plus a new one, but in-game placement is
-not right yet. See "Open issues".
+Status: **working in game** (ForeverCore v1.15.2, Shortest Path Forever v1.43.2, Questie 12.11.0), not yet upstream.
 
 ## Why
 
@@ -84,10 +83,10 @@ tools/gate
 
 ## Open issues
 
-- In game, the column landed left of the *game's* tracker position rather than under Questie's list. Cause not
-  yet identified.
-- Reported at the same time: Questie's tracker header not showing and its width setting not behaving. Not yet
-  known whether the patch causes this.
+- Confirmed in game after a `/reload`: with target `questie`, placement `under`, Lock off, the column's top left
+  corner is on the bottom left corner of `Questie_BaseFrame` (1568.3, 551.9 in both readouts).
+- Seen once before that reload and not reproduced: the column sat left of the *game's* tracker position, and
+  Questie's header was missing. Lock was on at the time. If it comes back, capture `ForeverTrackerHost.Debug()`.
 - Not localized beyond the English phrase keys; `Locales/enUS.lua` and `Locales/phrases.txt` need the three new
   phrases before a pull request.
 
