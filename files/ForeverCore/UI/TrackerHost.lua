@@ -190,6 +190,8 @@ local function Settings()
 	if settings.target ~= "questie" then
 		settings.target = nil
 	end
+	-- Over Questie's list rather than under it. Only Questie's tracker has the choice.
+	settings.above = settings.target == "questie" and settings.above == true or nil
 	return settings
 end
 -- Questie hides the game's quest tracker and draws its own list in Questie_BaseFrame, wherever the player put it. With
@@ -206,6 +208,12 @@ end
 ---@return Frame
 local function Tracker()
 	return Settings().target == "questie" and QuestieTracker() or ObjectiveTrackerFrame
+end
+-- Whether the column goes over Questie's tracker: its bottom left corner on the tracker's top left corner, so the
+-- column grows upward and Questie's list never moves it. Without Questie's frame the game's tracker is the place, under.
+---@return boolean
+local function Above()
+	return Settings().above == true and QuestieTracker() ~= nil
 end
 -- The column's width in its own units: the 260 of the client's ObjectiveTrackerContainer header template, so a Forever
 -- section reads at the width its template was drawn for.
@@ -1122,12 +1130,27 @@ local function FollowTracker(settings)
 		return
 	end
 	placeAgain, followed = false, true
+	local scale = host:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	local screenWidth = UIParent:GetWidth() / scale
+	if Above() then
+		-- Over Questie's tracker when the whole column fits between its top and the screen's, left of it when not.
+		local tracker = Tracker()
+		local edge = tracker:GetTop()
+		local bottom = edge and edge * tracker:GetEffectiveScale() / host:GetEffectiveScale()
+		if not bottom or bottom + (host:GetHeight() or 0) > UIParent:GetHeight() / scale then
+			PinLeft()
+			return
+		end
+		x = math.max(0, math.min(x, math.max(0, screenWidth - (host:GetWidth() or 0))))
+		host:ClearAllPoints()
+		host:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, bottom)
+		under = false
+		return
+	end
 	if (host:GetHeight() or 0) > top then
 		PinLeft()
 		return
 	end
-	local scale = host:GetEffectiveScale() / UIParent:GetEffectiveScale()
-	local screenWidth = UIParent:GetWidth() / scale
 	x = math.max(0, math.min(x, math.max(0, screenWidth - (host:GetWidth() or 0))))
 	host:ClearAllPoints()
 	host:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, top)
@@ -1162,7 +1185,12 @@ local function Anchor(settings)
 		local tracker = Tracker()
 		local top = tracker:GetTop()
 		if top then
-			return width, top * tracker:GetEffectiveScale() / host:GetEffectiveScale()
+			top = top * tracker:GetEffectiveScale() / host:GetEffectiveScale()
+			-- Over Questie's tracker, the room is from its top to the screen's.
+			if Above() then
+				return width, screenHeight - top
+			end
+			return width, top
 		end
 	end
 	PinLeft()
@@ -1294,24 +1322,29 @@ function api.SetPlacement(value)
 	host:MarkDirty()
 	NotifyAttachment(before)
 end
--- Which tracker Under and Left are measured from: "game", the client's own, or "questie", Questie's frame for players
--- whose quests are listed there. It only writes the setting, so it is safe in combat; the move waits for the next
--- layout. A dragged position stays as it is.
----@return "game"|"questie"
+-- Which tracker Under and Left are measured from: "game", the client's own, or Questie's frame for players whose
+-- quests are listed there, with the column under its list ("questie") or over it ("questieAbove"). It only writes the
+-- setting, so it is safe in combat; the move waits for the next layout. A dragged position stays as it is.
+---@return "game"|"questie"|"questieAbove"
 function api.GetTarget()
-	return Settings().target or "game"
+	local settings = Settings()
+	if settings.target == "questie" then
+		return settings.above and "questieAbove" or "questie"
+	end
+	return "game"
 end
----@param value "game"|"questie"
+---@param value "game"|"questie"|"questieAbove"
 function api.SetTarget(value)
-	if value ~= "game" and value ~= "questie" then
+	if value ~= "game" and value ~= "questie" and value ~= "questieAbove" then
 		return
 	end
 	local settings = Settings()
-	local target = value == "questie" and "questie" or nil
-	if settings.target == target then
+	local target = value ~= "game" and "questie" or nil
+	local above = value == "questieAbove" or nil
+	if settings.target == target and settings.above == above then
 		return
 	end
-	settings.target = target
+	settings.target, settings.above = target, above
 	placeAgain = true
 	host:MarkDirty()
 end
@@ -1736,7 +1769,7 @@ probe:SetPoint("TOPRIGHT", ObjectiveTrackerFrame.NineSlice or ObjectiveTrackerFr
 probe:SetScript("OnSizeChanged", Follow)
 -- Questie's frame gets the same probe on its bottom left corner, which a quest line, a resize or a drag moves. Its
 -- frame is an addon's, not the client's, so its showing and hiding, which move no corner, are heard with a script hook.
-local probed, hooked = ObjectiveTrackerFrame, nil
+local probed, probedCorner, hooked = ObjectiveTrackerFrame, "BOTTOMLEFT", nil
 local waiting, waited = false, 0
 -- Questie builds its tracker some seconds after login, with no event to hear. One check a second, for two minutes at
 -- most, finds it; a session where it never appears (Questie's tracker turned off) stops checking.
@@ -1770,14 +1803,16 @@ WatchTracker = function(settings)
 		questie:HookScript("OnHide", host.MarkDirty)
 	end
 	local tracker = questie or ObjectiveTrackerFrame
-	if tracker == probed then
+	-- A column over Questie's tracker follows its top left corner, one under it the bottom left.
+	local corner = questie and settings.above and "TOPLEFT" or "BOTTOMLEFT"
+	if tracker == probed and corner == probedCorner then
 		return
 	end
-	probed = tracker
+	probed, probedCorner = tracker, corner
 	probe:ClearAllPoints()
 	probe:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
 	if questie then
-		probe:SetPoint("TOPRIGHT", questie, "BOTTOMLEFT", 0, 0)
+		probe:SetPoint("TOPRIGHT", questie, corner, 0, 0)
 	else
 		probe:SetPoint("TOPRIGHT", ObjectiveTrackerFrame.NineSlice or ObjectiveTrackerFrame, "BOTTOMLEFT", 0, 0)
 	end

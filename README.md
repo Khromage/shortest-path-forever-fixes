@@ -23,26 +23,29 @@ Built on:
 
 ### ForeverCore `UI/TrackerHost.lua` (the logic)
 
-- New saved setting `trackerHost.target`: `nil` (game tracker) or `"questie"`.
+- New saved settings `trackerHost.target`: `nil` (game tracker) or `"questie"`, and `trackerHost.above`: `true`
+  puts the column over Questie's list instead of under it.
 - `QuestieTracker()` looks up `Questie_BaseFrame` on each use; `Tracker()` returns it when the target is
   `"questie"` and it exists, else `ObjectiveTrackerFrame`. Everything that used to read `ObjectiveTrackerFrame`
   for placement (`TrackerEdge`, `PinLeft`, `Anchor`) now reads `Tracker()`.
 - **Under**: column's top left corner on the bottom left corner of Questie's frame. A hidden Questie tracker
   (nothing tracked) leaves the column at its top.
-- **Left** / no room under: column's top right corner at Questie's top left corner. Placed by coordinates on
+- **Above** (`above = true`): column's bottom left corner on Questie's top left corner, so the column grows
+  upward and Questie's list never moves it. The probe watches Questie's top left corner instead.
+- **Left** / no room under or above: column's top right corner at Questie's top left corner. Placed by coordinates on
   `UIParent`, never anchored to Questie's frame: the column holds protected item buttons, and an anchor would stop
   Questie moving its own tracker in combat.
 - `WatchTracker()` runs each layout: re-aims the size probe at the followed tracker's bottom left corner (that is
   what makes the column follow a line added, a resize or a drag), hooks Questie's `OnShow`/`OnHide` once, and starts
   a once-a-second check (two minutes at most) for `Questie_BaseFrame`, which Questie creates some seconds after
   login with no event.
-- New API: `ForeverCore.TrackerHost.GetTarget()` → `"game"|"questie"`, `SetTarget(value)`.
+- New API: `ForeverCore.TrackerHost.GetTarget()` → `"game"|"questie"|"questieAbove"`, `SetTarget(value)`.
 - Nothing runs in combat, as before; the layout after combat catches up.
 
 ### Shortest Path Forever `UI/Settings.lua` (the switch)
 
 - Options → AddOns → Shortest Path Forever → Guidance → **Tracker to attach to**: a dropdown with "Game quest
-  tracker" and "Questie tracker", under "Attach to quest tracker". Shown only when Questie is enabled and the
+  tracker", "Above Questie's tracker" and "Under Questie's tracker", under "Attach to quest tracker". Shown only when Questie is enabled and the
   installed ForeverCore has `SetTarget`.
 
 Related existing behaviour worth knowing: **Lock the tracker** places the column once per session and then stops
@@ -87,6 +90,11 @@ tools/gate
   corner is on the bottom left corner of `Questie_BaseFrame` (1568.3, 551.9 in both readouts).
 - Seen once before that reload and not reproduced: the column sat left of the *game's* tracker position, and
   Questie's header was missing. Lock was on at the time. If it comes back, capture `ForeverTrackerHost.Debug()`.
+- "Above" is not yet checked in game.
+- The header menu's "Tracker position → Under the quest tracker" still reads "Under" when the target is above
+  Questie's tracker; it means "attached" there.
+- With Questie's "Sticky Durability Frame" on, the durability figure sits left of Questie's tracker top, the same
+  spot the column falls back to when it has no room.
 - Not localized beyond the English phrase keys; `Locales/enUS.lua` and `Locales/phrases.txt` need the three new
   phrases before a pull request.
 

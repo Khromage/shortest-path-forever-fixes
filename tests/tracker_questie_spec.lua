@@ -112,6 +112,27 @@ check(t.hostSettings.target == nil and UnderGame(t), "picking the game's tracker
 api.SetTarget("elsewhere")
 check(api.GetTarget() == "game", "an unknown target is ignored")
 
+-- Over Questie's tracker: the column's bottom left corner on the tracker's top left corner.
+rect.left, rect.top, rect.bottom = 200, 600, 300
+api.SetTarget("questieAbove")
+Tick(t)
+check(api.GetTarget() == "questieAbove" and t.hostSettings.above == true, "the choice of side is saved")
+check(At(t, "BOTTOMLEFT", 200, 600), "the column sits on top of Questie's tracker")
+check(t.first.available == 1080 - 600 - 10, "the sections lay out in the room over Questie's tracker")
+rect.bottom = 100
+Resize(t)
+check(At(t, "BOTTOMLEFT", 200, 600), "Questie's list growing does not move it")
+rect.top, rect.bottom = 700, 200
+Resize(t)
+check(At(t, "BOTTOMLEFT", 200, 700), "and it follows the tracker's top")
+rect.top = 1080 - t.host:GetHeight() + 1
+Resize(t)
+check(At(t, "TOPRIGHT", 200, rect.top), "with no room over the tracker it sits left of it")
+rect.top, rect.bottom = 900, 640
+api.SetTarget("questie")
+Tick(t)
+check(t.hostSettings.above == nil and At(t, "TOPLEFT", 200, 640), "picking Under puts it under the list again")
+
 -- Combat places nothing; the layout after it does.
 api.SetTarget("questie")
 Tick(t)

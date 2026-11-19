@@ -252,7 +252,8 @@ ns.Init(function()
 		Settings.NotifyUpdate(variable)
 	end)
 	-- Questie hides the game's quest tracker and lists the quests in its own, so with Questie installed the player
-	-- picks which of the two the column attaches to. One dropdown, so the two are never both chosen. A ForeverCore
+	-- picks which of the two the column attaches to, and for Questie's which side. One dropdown, so only one is ever
+	-- chosen. A ForeverCore
 	-- older than the choice has no SetTarget, and the row is left out.
 	local function QuestieEnabled()
 		if not C_AddOns then
@@ -286,14 +287,15 @@ ns.Init(function()
 		)
 		local targets = Secure(Settings.CreateControlTextContainer)()
 		Secure(targets.Add)(targets, "game", L["Game quest tracker"])
-		Secure(targets.Add)(targets, "questie", L["Questie tracker"])
+		Secure(targets.Add)(targets, "questieAbove", L["Above Questie's tracker"])
+		Secure(targets.Add)(targets, "questie", L["Under Questie's tracker"])
 		Settings.RegisterInitializer(
 			page,
 			Secure(Settings.CreateDropdownInitializer)(
 				target,
 				Secure(GenerateClosure)(targets.GetData, targets),
 				-- luacheck: push ignore 631
-				L["Which quest tracker the shared Forever tracker sits under. Questie hides the game's tracker and shows its own, so pick Questie's to keep journey steps with your quests."]
+				L["Which quest tracker the shared Forever tracker sits by. Questie hides the game's tracker and shows its own, so pick a place by Questie's to keep journey steps with your quests."]
 				-- luacheck: pop
 			)
 		)
