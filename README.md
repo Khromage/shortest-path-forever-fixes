@@ -35,10 +35,11 @@ Built on:
 - **Left** / no room under or above: column's top right corner at Questie's top left corner. Placed by coordinates on
   `UIParent`, never anchored to Questie's frame: the column holds protected item buttons, and an anchor would stop
   Questie moving its own tracker in combat.
-- `WatchTracker()` runs each layout: re-aims the size probe at the followed tracker's bottom left corner (that is
-  what makes the column follow a line added, a resize or a drag), hooks Questie's `OnShow`/`OnHide` once, and starts
-  a once-a-second check (two minutes at most) for `Questie_BaseFrame`, which Questie creates some seconds after
-  login with no event.
+- `WatchTracker()` runs each layout: hooks Questie's frame once (`OnSizeChanged`, `OnShow`, `OnHide`, and
+  `hooksecurefunc` on its `SetPoint` and `StopMovingOrSizing`) so the column follows a line added, a resize or a
+  drop, and starts a once-a-second check (two minutes at most) for `Questie_BaseFrame`, which Questie creates some
+  seconds after login with no event. Nothing is anchored to Questie's frame; an earlier version anchored a probe
+  frame to it and was replaced (see "Open issues"). The column moves when a drag ends, not during it.
 - New API: `ForeverCore.TrackerHost.GetTarget()` → `"game"|"questie"|"questieAbove"`, `SetTarget(value)`.
 - Nothing runs in combat, as before; the layout after combat catches up.
 
@@ -91,6 +92,12 @@ tools/gate
 - Seen once before that reload and not reproduced: the column sat left of the *game's* tracker position, and
   Questie's header was missing. Lock was on at the time. If it comes back, capture `ForeverTrackerHost.Debug()`.
 - "Above" is not yet checked in game.
+- Questie error after dragging or resizing its tracker: `TrackerBaseFrame.lua:355: attempt to perform arithmetic on
+  local 'yTop' (a nil value)`. `Questie_BaseFrame:GetLeft()` returned nil in `_UpdateTrackerPosition`, which had
+  already cleared the frame's points, leaving Questie's tracker with no place until a reload: header gone, and the
+  column falling back to the game tracker's left pin (the misplacement seen earlier). Not known whether the probe
+  anchored to Questie's frame caused the nil rect or it is Questie's own bug on this client; the probe is gone
+  either way. Retest by dragging and resizing Questie's tracker.
 - The header menu's "Tracker position → Under the quest tracker" still reads "Under" when the target is above
   Questie's tracker; it means "attached" there.
 - With Questie's "Sticky Durability Frame" on, the durability figure sits left of Questie's tracker top, the same

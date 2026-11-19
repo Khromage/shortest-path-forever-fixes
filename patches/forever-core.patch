@@ -1,5 +1,5 @@
 diff --git a/UI/TrackerHost.lua b/UI/TrackerHost.lua
-index 688aa86..c41b8ea 100644
+index 688aa86..6dc5714 100644
 --- a/UI/TrackerHost.lua
 +++ b/UI/TrackerHost.lua
 @@ -101,6 +101,7 @@ if type(existing) == "table" then
@@ -198,13 +198,14 @@ index 688aa86..c41b8ea 100644
  -- Whether the column follows a place, rather than a position the player dragged it to.
  ---@return boolean
  local function Placed()
-@@ -1672,6 +1767,56 @@ local probe = CreateFrame("Frame", nil, UIParent)
+@@ -1672,6 +1767,52 @@ local probe = CreateFrame("Frame", nil, UIParent)
  probe:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
  probe:SetPoint("TOPRIGHT", ObjectiveTrackerFrame.NineSlice or ObjectiveTrackerFrame, "BOTTOMLEFT", 0, 0)
  probe:SetScript("OnSizeChanged", Follow)
-+-- Questie's frame gets the same probe on its bottom left corner, which a quest line, a resize or a drag moves. Its
-+-- frame is an addon's, not the client's, so its showing and hiding, which move no corner, are heard with a script hook.
-+local probed, probedCorner, hooked = ObjectiveTrackerFrame, "BOTTOMLEFT", nil
++-- Questie's frame is an addon's, not the client's, so it is heard directly instead: script hooks for its size and its
++-- showing and hiding, and hooks after the two calls that move it, Questie's own SetPoint and the end of a drag. Nothing
++-- of ours is anchored to Questie's frame, so its anchors and its rect stay exactly as Questie made them.
++local hooked
 +local waiting, waited = false, 0
 +-- Questie builds its tracker some seconds after login, with no event to hear. One check a second, for two minutes at
 +-- most, finds it; a session where it never appears (Questie's tracker turned off) stops checking.
@@ -227,29 +228,24 @@ index 688aa86..c41b8ea 100644
 +end
 +---@param settings ForeverTrackerSettings
 +WatchTracker = function(settings)
-+	local questie = settings.target == "questie" and QuestieTracker() or nil
-+	if settings.target == "questie" and not questie and not waiting and waited < QUESTIE_WAIT then
-+		waiting = true
-+		C_Timer.After(1, AwaitQuestie)
++	if settings.target ~= "questie" then
++		return
 +	end
-+	if questie and hooked ~= questie then
++	local questie = QuestieTracker()
++	if not questie then
++		if not waiting and waited < QUESTIE_WAIT then
++			waiting = true
++			C_Timer.After(1, AwaitQuestie)
++		end
++		return
++	end
++	if hooked ~= questie then
 +		hooked = questie
 +		questie:HookScript("OnShow", host.MarkDirty)
 +		questie:HookScript("OnHide", host.MarkDirty)
-+	end
-+	local tracker = questie or ObjectiveTrackerFrame
-+	-- A column over Questie's tracker follows its top left corner, one under it the bottom left.
-+	local corner = questie and settings.above and "TOPLEFT" or "BOTTOMLEFT"
-+	if tracker == probed and corner == probedCorner then
-+		return
-+	end
-+	probed, probedCorner = tracker, corner
-+	probe:ClearAllPoints()
-+	probe:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
-+	if questie then
-+		probe:SetPoint("TOPRIGHT", questie, corner, 0, 0)
-+	else
-+		probe:SetPoint("TOPRIGHT", ObjectiveTrackerFrame.NineSlice or ObjectiveTrackerFrame, "BOTTOMLEFT", 0, 0)
++		questie:HookScript("OnSizeChanged", Follow)
++		hooksecurefunc(questie, "SetPoint", Follow)
++		hooksecurefunc(questie, "StopMovingOrSizing", Follow)
 +	end
 +end
  host:SetScript("OnEvent", function(_, event)

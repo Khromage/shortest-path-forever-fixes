@@ -16,7 +16,7 @@ $files = @(
 	@{
 		Path     = "ForeverCore\UI\TrackerHost.lua"
 		Original = "c217ef2e8d00c9e6702dfc08062589c88a024e1e2168dc65a3dd06bde409a890"
-		Patched  = "05a25900d2d6ce52def2912462fc48a547993385af7fe10c2ddd78ba3c76d1b6"
+		Patched  = "3b6ed1d79fdf6c77b2eb1293504c8775bb07998445c6dca8fe358a0a058dec82"
 	},
 	@{
 		Path     = "ShortestPathForever\UI\Settings.lua"

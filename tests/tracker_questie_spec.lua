@@ -42,9 +42,13 @@ end
 local function UnderGame(ctx)
 	return At(ctx, "TOPLEFT", ctx.nativeRect.left, ctx.nativeRect.line)
 end
--- Questie's last line moved: the probe on its bottom left corner changes size.
-local function Resize(ctx)
-	ctx.moveLine(ctx.nativeRect.line)
+-- Questie's last line moved, or Questie placed its tracker again: the hooks on its frame hear both.
+local secure = {}
+local function Resize()
+	hooks.OnSizeChanged(questie)
+end
+local function Move()
+	secure.SetPoint(questie)
 end
 -- A second of game time: the queued timers run, then the layouts they queued.
 local function Tick(ctx)
@@ -53,6 +57,10 @@ local function Tick(ctx)
 end
 
 local t = harness.new({ hostSettings = { attached = false } })
+rawset(t.env, "hooksecurefunc", function(frame, name, fn)
+	assert(frame == questie, "only Questie's frame is hooked")
+	secure[name] = fn
+end)
 local check, api = t.check, t.ns.TrackerHost
 check(api.GetTarget() == "game" and UnderGame(t), "the column follows the game's tracker until told otherwise")
 
@@ -71,21 +79,34 @@ check(At(t, "TOPLEFT", 700, 350), "once Questie's tracker exists the column sits
 check(t.pending() == 0, "and the checking stops")
 check(t.first.available == 600 - 10, "the sections lay out in the room from Questie's top")
 check(type(hooks.OnShow) == "function" and type(hooks.OnHide) == "function", "its show and hide are hooked")
+check(type(hooks.OnSizeChanged) == "function", "and its size")
+check(secure.SetPoint and secure.StopMovingOrSizing, "and the calls that move it")
+for _, f in ipairs(t.frames) do
+	local point = f.point
+	check(not point or point[2] ~= questie, "nothing is anchored to Questie's frame")
+end
 
 -- A quest added or dropped moves Questie's last line; a drag moves the whole frame.
 rect.bottom = 300
-Resize(t)
+Resize()
 check(At(t, "TOPLEFT", 700, 300), "the column follows Questie's last line")
 rect.left, rect.top, rect.bottom = 200, 900, 640
-Resize(t)
+Move()
 check(At(t, "TOPLEFT", 200, 640), "and Questie's tracker wherever it is dragged")
+
+-- Questie clears its points before it sets them again; a tracker with no rect moves nothing.
+local saved = { rect.left, rect.top, rect.bottom }
+rect.left, rect.top, rect.bottom = nil, nil, nil
+Resize()
+check(At(t, "TOPLEFT", 200, 640), "a Questie tracker with no place holds the column where it was")
+rect.left, rect.top, rect.bottom = saved[1], saved[2], saved[3]
 
 -- No room under the list: left of Questie's tracker, by coordinates.
 rect.bottom = t.host:GetHeight() - 1
-Resize(t)
+Resize()
 check(At(t, "TOPRIGHT", 200, 900), "a column that does not fit under the list sits left of Questie's tracker")
 rect.bottom = 640
-Resize(t)
+Resize()
 check(At(t, "TOPLEFT", 200, 640), "and returns under it when it fits")
 
 -- Questie hides its tracker with nothing tracked: the column takes the tracker's top, as it does for the game's.
@@ -120,13 +141,13 @@ check(api.GetTarget() == "questieAbove" and t.hostSettings.above == true, "the c
 check(At(t, "BOTTOMLEFT", 200, 600), "the column sits on top of Questie's tracker")
 check(t.first.available == 1080 - 600 - 10, "the sections lay out in the room over Questie's tracker")
 rect.bottom = 100
-Resize(t)
+Resize()
 check(At(t, "BOTTOMLEFT", 200, 600), "Questie's list growing does not move it")
 rect.top, rect.bottom = 700, 200
-Resize(t)
+Resize()
 check(At(t, "BOTTOMLEFT", 200, 700), "and it follows the tracker's top")
 rect.top = 1080 - t.host:GetHeight() + 1
-Resize(t)
+Resize()
 check(At(t, "TOPRIGHT", 200, rect.top), "with no room over the tracker it sits left of it")
 rect.top, rect.bottom = 900, 640
 api.SetTarget("questie")
@@ -138,7 +159,7 @@ api.SetTarget("questie")
 Tick(t)
 t.setCombat(true)
 rect.bottom = 500
-Resize(t)
+Resize()
 check(At(t, "TOPLEFT", 200, 640), "combat holds the column where it was")
 t.setCombat(false)
 t.fire("PLAYER_REGEN_ENABLED")
