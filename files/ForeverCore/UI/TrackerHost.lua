@@ -102,6 +102,7 @@ if type(existing) == "table" then
 		"GetScale",
 		"GetSettings",
 		"GetTarget",
+		"GetTargetSide",
 		"IsAttached",
 		"IsAttachedToQuestTracker",
 		"IsLocked",
@@ -113,6 +114,7 @@ if type(existing) == "table" then
 		"SetScale",
 		"SetSectionMaxHeight",
 		"SetTarget",
+		"SetTargetSide",
 	}) do
 		local method = existing[name]
 		if type(method) == "function" then
@@ -190,8 +192,9 @@ local function Settings()
 	if settings.target ~= "questie" then
 		settings.target = nil
 	end
-	-- Over Questie's list rather than under it. Only Questie's tracker has the choice.
-	settings.above = settings.target == "questie" and settings.above == true or nil
+	-- Over Questie's list rather than under it. Only Questie's tracker has the choice, which is kept while the game's
+	-- tracker is the target.
+	settings.above = settings.above == true or nil
 	return settings
 end
 -- Questie hides the game's quest tracker and draws its own list in Questie_BaseFrame, wherever the player put it. With
@@ -213,7 +216,8 @@ end
 -- column grows upward and Questie's list never moves it. Without Questie's frame the game's tracker is the place, under.
 ---@return boolean
 local function Above()
-	return Settings().above == true and QuestieTracker() ~= nil
+	local settings = Settings()
+	return settings.target == "questie" and settings.above == true and QuestieTracker() ~= nil
 end
 -- The column's width in its own units: the 260 of the client's ObjectiveTrackerContainer header template, so a Forever
 -- section reads at the width its template was drawn for.
@@ -1322,29 +1326,44 @@ function api.SetPlacement(value)
 	host:MarkDirty()
 	NotifyAttachment(before)
 end
--- Which tracker Under and Left are measured from: "game", the client's own, or Questie's frame for players whose
--- quests are listed there, with the column under its list ("questie") or over it ("questieAbove"). It only writes the
--- setting, so it is safe in combat; the move waits for the next layout. A dragged position stays as it is.
----@return "game"|"questie"|"questieAbove"
+-- Which tracker Under and Left are measured from: "game", the client's own, or "questie", Questie's frame for players
+-- whose quests are listed there. It only writes the setting, so it is safe in combat; the move waits for the next
+-- layout. A dragged position stays as it is.
+---@return "game"|"questie"
 function api.GetTarget()
-	local settings = Settings()
-	if settings.target == "questie" then
-		return settings.above and "questieAbove" or "questie"
-	end
-	return "game"
+	return Settings().target or "game"
 end
----@param value "game"|"questie"|"questieAbove"
+---@param value "game"|"questie"
 function api.SetTarget(value)
-	if value ~= "game" and value ~= "questie" and value ~= "questieAbove" then
+	if value ~= "game" and value ~= "questie" then
 		return
 	end
 	local settings = Settings()
-	local target = value ~= "game" and "questie" or nil
-	local above = value == "questieAbove" or nil
-	if settings.target == target and settings.above == above then
+	local target = value == "questie" and "questie" or nil
+	if settings.target == target then
 		return
 	end
-	settings.target, settings.above = target, above
+	settings.target = target
+	placeAgain = true
+	host:MarkDirty()
+end
+-- Which side of Questie's tracker an attached column takes: "under" its list (the default) or "above" it. The game's
+-- tracker has no such choice, and the side is kept for when Questie's tracker is the target again.
+---@return "under"|"above"
+function api.GetTargetSide()
+	return Settings().above and "above" or "under"
+end
+---@param value "under"|"above"
+function api.SetTargetSide(value)
+	if value ~= "under" and value ~= "above" then
+		return
+	end
+	local settings = Settings()
+	local above = value == "above" or nil
+	if settings.above == above then
+		return
+	end
+	settings.above = above
 	placeAgain = true
 	host:MarkDirty()
 end
@@ -1768,9 +1787,28 @@ probe:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
 probe:SetPoint("TOPRIGHT", ObjectiveTrackerFrame.NineSlice or ObjectiveTrackerFrame, "BOTTOMLEFT", 0, 0)
 probe:SetScript("OnSizeChanged", Follow)
 -- Questie's frame is an addon's, not the client's, so it is heard directly instead: script hooks for its size and its
--- showing and hiding, and hooks after the two calls that move it, Questie's own SetPoint and the end of a drag. Nothing
--- of ours is anchored to Questie's frame, so its anchors and its rect stay exactly as Questie made them.
+-- showing and hiding, and hooks after the calls that move it, Questie's own SetPoint and the start and end of a drag.
+-- Nothing of ours is anchored to Questie's frame, so its anchors and its rect stay exactly as Questie made them.
 local hooked
+-- A drag moves Questie's frame with the cursor and calls nothing, so the column follows it frame by frame, only from
+-- the drag's start to its end. The mouse button coming up ends it too, should the stop call never come.
+local dragWatch = CreateFrame("Frame", nil, UIParent)
+local function StopDragWatch()
+	dragWatch:SetScript("OnUpdate", nil)
+	Follow()
+end
+local function DragWatch()
+	if IsMouseButtonDown and not IsMouseButtonDown() then
+		StopDragWatch()
+		return
+	end
+	Follow()
+end
+local function StartDragWatch()
+	if not InCombatLockdown() then
+		dragWatch:SetScript("OnUpdate", DragWatch)
+	end
+end
 local waiting, waited = false, 0
 -- Questie builds its tracker some seconds after login, with no event to hear. One check a second, for two minutes at
 -- most, finds it; a session where it never appears (Questie's tracker turned off) stops checking.
@@ -1810,7 +1848,9 @@ WatchTracker = function(settings)
 		questie:HookScript("OnHide", host.MarkDirty)
 		questie:HookScript("OnSizeChanged", Follow)
 		hooksecurefunc(questie, "SetPoint", Follow)
-		hooksecurefunc(questie, "StopMovingOrSizing", Follow)
+		hooksecurefunc(questie, "StartMoving", StartDragWatch)
+		hooksecurefunc(questie, "StartSizing", StartDragWatch)
+		hooksecurefunc(questie, "StopMovingOrSizing", StopDragWatch)
 	end
 end
 host:SetScript("OnEvent", function(_, event)

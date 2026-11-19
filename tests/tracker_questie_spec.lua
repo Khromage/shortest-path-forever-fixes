@@ -135,9 +135,11 @@ check(api.GetTarget() == "game", "an unknown target is ignored")
 
 -- Over Questie's tracker: the column's bottom left corner on the tracker's top left corner.
 rect.left, rect.top, rect.bottom = 200, 600, 300
-api.SetTarget("questieAbove")
+api.SetTarget("questie")
+api.SetTargetSide("above")
 Tick(t)
-check(api.GetTarget() == "questieAbove" and t.hostSettings.above == true, "the choice of side is saved")
+check(api.GetTarget() == "questie" and api.GetTargetSide() == "above", "the side is its own choice")
+check(t.hostSettings.above == true, "and is saved")
 check(At(t, "BOTTOMLEFT", 200, 600), "the column sits on top of Questie's tracker")
 check(t.first.available == 1080 - 600 - 10, "the sections lay out in the room over Questie's tracker")
 rect.bottom = 100
@@ -150,9 +152,46 @@ rect.top = 1080 - t.host:GetHeight() + 1
 Resize()
 check(At(t, "TOPRIGHT", 200, rect.top), "with no room over the tracker it sits left of it")
 rect.top, rect.bottom = 900, 640
+api.SetTarget("game")
+Tick(t)
+check(UnderGame(t) and api.GetTargetSide() == "above", "the game's tracker has no side, and Questie's is kept")
 api.SetTarget("questie")
 Tick(t)
+check(At(t, "BOTTOMLEFT", 200, 900), "so the column returns over Questie's tracker")
+
+-- A drag moves Questie's frame with no call: the column follows each frame from the drag's start to its end.
+local function DragFrame()
+	for _, f in ipairs(t.frames) do
+		if f.scripts.OnUpdate then
+			return f
+		end
+	end
+end
+local down = true
+rawset(t.env, "IsMouseButtonDown", function()
+	return down
+end)
+check(DragFrame() == nil, "nothing runs each frame while Questie's tracker is still")
+secure.StartMoving(questie)
+local drag = DragFrame()
+check(drag ~= nil, "a drag starts the frame by frame follow")
+rect.left, rect.top = 300, 800
+drag.scripts.OnUpdate(drag)
+check(At(t, "BOTTOMLEFT", 300, 800), "the column moves with Questie's tracker during the drag")
+rect.left, rect.top = 350, 850
+secure.StopMovingOrSizing(questie)
+check(At(t, "BOTTOMLEFT", 350, 850) and DragFrame() == nil, "the drop places it and ends the follow")
+secure.StartSizing(questie)
+down = false
+drag.scripts.OnUpdate(drag)
+check(DragFrame() == nil, "a mouse button released ends it as well")
+rect.left, rect.top, rect.bottom = 200, 900, 640
+
+api.SetTargetSide("under")
+Tick(t)
 check(t.hostSettings.above == nil and At(t, "TOPLEFT", 200, 640), "picking Under puts it under the list again")
+api.SetTargetSide("sideways")
+check(api.GetTargetSide() == "under", "an unknown side is ignored")
 
 -- Combat places nothing; the layout after it does.
 api.SetTarget("questie")

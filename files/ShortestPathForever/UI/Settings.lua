@@ -252,8 +252,8 @@ ns.Init(function()
 		Settings.NotifyUpdate(variable)
 	end)
 	-- Questie hides the game's quest tracker and lists the quests in its own, so with Questie installed the player
-	-- picks which of the two the column attaches to, and for Questie's which side. One dropdown, so only one is ever
-	-- chosen. A ForeverCore
+	-- picks which of the two the column attaches to in one dropdown, so only one is ever chosen, and which side of
+	-- Questie's in another. A ForeverCore
 	-- older than the choice has no SetTarget, and the row is left out.
 	local function QuestieEnabled()
 		if not C_AddOns then
@@ -271,7 +271,7 @@ ns.Init(function()
 		end
 		return true
 	end
-	if type(host.SetTarget) == "function" and type(host.GetTarget) == "function" and QuestieEnabled() then
+	if type(host.SetTarget) == "function" and type(host.SetTargetSide) == "function" and QuestieEnabled() then
 		local target = Settings.RegisterProxySetting(
 			page,
 			"ShortestPathForever_trackerTarget",
@@ -287,16 +287,40 @@ ns.Init(function()
 		)
 		local targets = Secure(Settings.CreateControlTextContainer)()
 		Secure(targets.Add)(targets, "game", L["Game quest tracker"])
-		Secure(targets.Add)(targets, "questieAbove", L["Above Questie's tracker"])
-		Secure(targets.Add)(targets, "questie", L["Under Questie's tracker"])
+		Secure(targets.Add)(targets, "questie", L["Questie tracker"])
 		Settings.RegisterInitializer(
 			page,
 			Secure(Settings.CreateDropdownInitializer)(
 				target,
 				Secure(GenerateClosure)(targets.GetData, targets),
 				-- luacheck: push ignore 631
-				L["Which quest tracker the shared Forever tracker sits by. Questie hides the game's tracker and shows its own, so pick a place by Questie's to keep journey steps with your quests."]
+				L["Which quest tracker the shared Forever tracker attaches to. Questie hides the game's tracker and shows its own, so pick Questie's to keep journey steps with your quests."]
 				-- luacheck: pop
+			)
+		)
+		-- Which side of Questie's tracker, its own choice: the game's tracker only has Under.
+		local side = Settings.RegisterProxySetting(
+			page,
+			"ShortestPathForever_trackerTargetSide",
+			Settings.VarType.String,
+			L["Side of Questie's tracker"],
+			"under",
+			function()
+				return host.GetTargetSide()
+			end,
+			function(value)
+				host.SetTargetSide(value)
+			end
+		)
+		local sides = Secure(Settings.CreateControlTextContainer)()
+		Secure(sides.Add)(sides, "above", L["Above"])
+		Secure(sides.Add)(sides, "under", L["Under"])
+		Settings.RegisterInitializer(
+			page,
+			Secure(Settings.CreateDropdownInitializer)(
+				side,
+				Secure(GenerateClosure)(sides.GetData, sides),
+				L["Whether the shared Forever tracker sits above Questie's quest list or under it. Used when it is attached to Questie's tracker."]
 			)
 		)
 	end
